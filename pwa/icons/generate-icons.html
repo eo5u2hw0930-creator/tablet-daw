@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Icon Generator for TabletDAW</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #1a1a1a; color: #fff; }
+        canvas { border: 1px solid #333; margin: 10px; }
+        .icons { display: flex; flex-wrap: wrap; gap: 10px; }
+        button { padding: 10px 20px; margin: 10px 0; cursor: pointer; }
+        a { color: #00ff88; }
+    </style>
+</head>
+<body>
+    <h1>TabletDAW Icon Generator</h1>
+    <p>아래 버튼을 클릭하여 각 크기의 아이콘을 다운로드하세요.</p>
+    <div class="icons" id="icons"></div>
+    
+    <script>
+        const sizes = [72, 96, 128, 144, 152, 192, 384, 512];
+        
+        function createIcon(size) {
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            
+            // Background
+            const gradient = ctx.createLinearGradient(0, 0, size, size);
+            gradient.addColorStop(0, '#12121a');
+            gradient.addColorStop(1, '#0a0a0f');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, size, size);
+            
+            // Border glow
+            ctx.strokeStyle = '#00ff88';
+            ctx.lineWidth = size * 0.02;
+            ctx.strokeRect(size * 0.05, size * 0.05, size * 0.9, size * 0.9);
+            
+            // Piano keys representation
+            const keyWidth = size * 0.08;
+            const keyHeight = size * 0.4;
+            const startX = size * 0.15;
+            const startY = size * 0.3;
+            
+            // White keys
+            ctx.fillStyle = '#ffffff';
+            for (let i = 0; i < 5; i++) {
+                ctx.fillRect(startX + i * keyWidth * 1.2, startY, keyWidth, keyHeight);
+            }
+            
+            // Black keys
+            ctx.fillStyle = '#1a1a1a';
+            for (let i = 0; i < 4; i++) {
+                if (i !== 2) {
+                    ctx.fillRect(startX + i * keyWidth * 1.2 + keyWidth * 0.7, startY, keyWidth * 0.6, keyHeight * 0.6);
+                }
+            }
+            
+            // Notes
+            ctx.fillStyle = '#00ff88';
+            ctx.fillRect(size * 0.2, size * 0.75, size * 0.15, size * 0.06);
+            ctx.fillStyle = '#ff3399';
+            ctx.fillRect(size * 0.4, size * 0.75, size * 0.2, size * 0.06);
+            ctx.fillStyle = '#00d4ff';
+            ctx.fillRect(size * 0.65, size * 0.75, size * 0.15, size * 0.06);
+            
+            return canvas;
+        }
+        
+        const container = document.getElementById('icons');
+        sizes.forEach(size => {
+            const div = document.createElement('div');
+            const canvas = createIcon(size);
+            const link = document.createElement('a');
+            link.href = canvas.toDataURL('image/png');
+            link.download = `icon-${size}.png`;
+            link.textContent = `Download ${size}x${size}`;
+            
+            div.appendChild(canvas);
+            div.appendChild(document.createElement('br'));
+            div.appendChild(link);
+            container.appendChild(div);
+        });
+    </script>
+</body>
+</html>
