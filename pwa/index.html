@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -250,6 +251,22 @@
             font-family: 'JetBrains Mono', monospace;
             font-size: 11px;
             max-width: 100px;
+        }
+
+        .instrument-selector {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .instrument-dropdown {
+            padding: 6px 8px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--accent-cyan);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
         }
 
         .time-display {
@@ -540,14 +557,14 @@
         .audio-track {
             display: flex;
             border-bottom: 1px solid var(--border-color);
-            height: 45px;
-            min-height: 45px;
+            height: 55px;
+            min-height: 55px;
         }
 
         .audio-track.active { background: rgba(0,255,136,0.05); }
 
         .track-info {
-            width: 90px;
+            width: 100px;
             padding: 4px;
             background: var(--bg-secondary);
             border-right: 1px solid var(--border-color);
@@ -555,6 +572,7 @@
             display: flex;
             flex-direction: column;
             justify-content: center;
+            gap: 2px;
         }
 
         .track-name-input {
@@ -563,6 +581,17 @@
             font-family: 'JetBrains Mono', monospace;
             font-size: 9px;
             font-weight: 600;
+            width: 100%;
+        }
+
+        .track-instrument-select {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 3px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 8px;
+            color: var(--accent-cyan);
+            padding: 2px;
             width: 100%;
         }
 
@@ -658,7 +687,7 @@
             .toolbar { padding: 4px 6px; min-height: 40px; }
             .toolbar-btn { padding: 6px 10px; font-size: 10px; }
             .audio-tracks-section { max-height: 25%; min-height: 60px; }
-            .audio-track { height: 40px; min-height: 40px; }
+            .audio-track { height: 50px; min-height: 50px; }
         }
 
         /* Phone portrait */
@@ -670,7 +699,7 @@
             }
             .toolbar { gap: 4px; }
             .toolbar-btn { padding: 6px 8px; font-size: 10px; }
-            .track-info { width: 70px; }
+            .track-info { width: 80px; }
         }
     </style>
 </head>
@@ -716,6 +745,10 @@
                 </select>
                 <button class="toolbar-btn" onclick="addNewTrack()">+</button>
                 <button class="toolbar-btn" onclick="deleteCurrentTrack()">-</button>
+            </div>
+            <div class="instrument-selector">
+                <select class="instrument-dropdown" id="instrumentSelect" onchange="changeCurrentInstrument()">
+                </select>
             </div>
             <div class="time-display" id="timeDisplay">00:00</div>
         </div>
@@ -765,6 +798,84 @@
                 '💡 홈 화면에 추가하려면 브라우저 메뉴에서 "홈 화면에 추가"를 선택하세요';
         });
 
+        // Instruments configuration
+        const INSTRUMENTS = {
+            piano: {
+                name: '🎹 Piano',
+                type: 'triangle',
+                attack: 0.02,
+                decay: 0.3,
+                sustain: 0.4,
+                release: 0.3,
+                harmonics: [1, 0.5, 0.25]
+            },
+            synth: {
+                name: '🎛️ Synth',
+                type: 'sawtooth',
+                attack: 0.05,
+                decay: 0.2,
+                sustain: 0.6,
+                release: 0.2,
+                harmonics: [1]
+            },
+            bass: {
+                name: '🎸 Bass',
+                type: 'sine',
+                attack: 0.02,
+                decay: 0.1,
+                sustain: 0.7,
+                release: 0.1,
+                harmonics: [1, 0.5],
+                octaveShift: -1
+            },
+            organ: {
+                name: '🎵 Organ',
+                type: 'sine',
+                attack: 0.05,
+                decay: 0.1,
+                sustain: 0.9,
+                release: 0.1,
+                harmonics: [1, 1, 0.5, 0.25]
+            },
+            pad: {
+                name: '☁️ Pad',
+                type: 'sine',
+                attack: 0.4,
+                decay: 0.3,
+                sustain: 0.7,
+                release: 0.5,
+                harmonics: [1, 0.3]
+            },
+            pluck: {
+                name: '🪕 Pluck',
+                type: 'triangle',
+                attack: 0.01,
+                decay: 0.2,
+                sustain: 0.1,
+                release: 0.1,
+                harmonics: [1, 0.7, 0.3]
+            },
+            square: {
+                name: '🔲 Square',
+                type: 'square',
+                attack: 0.02,
+                decay: 0.1,
+                sustain: 0.5,
+                release: 0.1,
+                harmonics: [1]
+            },
+            bell: {
+                name: '🔔 Bell',
+                type: 'sine',
+                attack: 0.01,
+                decay: 0.5,
+                sustain: 0.2,
+                release: 0.4,
+                harmonics: [1, 0.6, 0.4, 0.3],
+                detuneAmount: 5
+            }
+        };
+
         // Config
         const CELL_WIDTH = 25, CELL_HEIGHT = 18, TOTAL_BARS = 16, BEATS_PER_BAR = 4;
         const TOTAL_BEATS = TOTAL_BARS * BEATS_PER_BAR;
@@ -782,6 +893,34 @@
         const blackKeyIndices = [1,3,6,8,10];
         const totalRows = octaves.length * 12;
 
+        // Initialize instrument dropdown
+        function initInstrumentDropdown() {
+            const select = document.getElementById('instrumentSelect');
+            select.innerHTML = '';
+            Object.keys(INSTRUMENTS).forEach(key => {
+                const opt = document.createElement('option');
+                opt.value = key;
+                opt.textContent = INSTRUMENTS[key].name;
+                select.appendChild(opt);
+            });
+        }
+
+        // Change current track instrument
+        function changeCurrentInstrument() {
+            const instrument = document.getElementById('instrumentSelect').value;
+            tracks[currentTrackIndex].instrument = instrument;
+            const trackEl = document.querySelector(`.audio-track[data-track-id="${currentTrackIndex}"] .track-instrument-select`);
+            if (trackEl) trackEl.value = instrument;
+        }
+
+        // Change track instrument from track panel
+        function changeTrackInstrument(trackId, instrument) {
+            tracks[trackId].instrument = instrument;
+            if (trackId === currentTrackIndex) {
+                document.getElementById('instrumentSelect').value = instrument;
+            }
+        }
+
         // Modal
         function showNewProjectModal() { document.getElementById('modalOverlay').classList.add('show'); }
         function closeModal() { document.getElementById('modalOverlay').classList.remove('show'); }
@@ -790,15 +929,17 @@
         function createNewProject() {
             document.getElementById('startScreen').classList.add('hidden');
             document.getElementById('appContainer').classList.add('show');
+            initInstrumentDropdown();
             initProject();
         }
 
         function resetProject() {
             stopPlayback();
-            tracks = [{ name: 'Track 1', notes: [], color: TRACK_COLORS[0], muted: false, solo: false }];
+            tracks = [{ name: 'Track 1', notes: [], color: TRACK_COLORS[0], muted: false, solo: false, instrument: 'piano' }];
             currentTrackIndex = 0;
             bpm = 120;
             document.getElementById('bpmInput').value = 120;
+            document.getElementById('instrumentSelect').value = 'piano';
             playheadPosition = 0;
             document.getElementById('trackSelect').innerHTML = '<option value="0">Track 1</option>';
             rebuildTrackUI();
@@ -810,7 +951,7 @@
         }
 
         function initProject() {
-            tracks = [{ name: 'Track 1', notes: [], color: TRACK_COLORS[0], muted: false, solo: false }];
+            tracks = [{ name: 'Track 1', notes: [], color: TRACK_COLORS[0], muted: false, solo: false, instrument: 'piano' }];
             initTimeline();
             initPianoRoll();
             setupGridDrawing();
@@ -824,10 +965,17 @@
             const c = document.getElementById('tracksContainer');
             c.innerHTML = '';
             tracks.forEach((t, i) => {
+                const instrumentOptions = Object.keys(INSTRUMENTS).map(key => 
+                    `<option value="${key}" ${t.instrument === key ? 'selected' : ''}>${INSTRUMENTS[key].name}</option>`
+                ).join('');
+                
                 c.insertAdjacentHTML('beforeend', `
                     <div class="audio-track ${i === currentTrackIndex ? 'active' : ''}" data-track-id="${i}">
                         <div class="track-info">
                             <input type="text" class="track-name-input" value="${t.name}" maxlength="12" style="color:${t.color};">
+                            <select class="track-instrument-select" onchange="changeTrackInstrument(${i}, this.value)">
+                                ${instrumentOptions}
+                            </select>
                             <div class="track-controls">
                                 <button class="track-btn solo ${t.solo?'active':''}" onclick="toggleSolo(this,${i})">S</button>
                                 <button class="track-btn mute ${t.muted?'active':''}" onclick="toggleMute(this,${i})">M</button>
@@ -905,7 +1053,6 @@
 
         function setupGridDrawing() {
             const grid = document.getElementById('pianoGrid');
-            let longPressTimer = null;
 
             const startDraw = (e) => {
                 if (e.button === 2) return;
@@ -994,7 +1141,6 @@
             let drag = false, resize = false, sx, sy, sb, sr, sl;
             const handle = el.querySelector('.note-resize');
 
-            // Long press for delete on mobile
             let longPress = null;
             el.addEventListener('touchstart', (e) => {
                 longPress = setTimeout(() => { deleteNoteAtIndex(idx); }, 500);
@@ -1108,6 +1254,7 @@
 
         function updateTrackSelection() {
             document.querySelectorAll('.audio-track').forEach((el, i) => el.classList.toggle('active', i === currentTrackIndex));
+            document.getElementById('instrumentSelect').value = tracks[currentTrackIndex].instrument || 'piano';
         }
 
         function selectTrackFromPreview(id) {
@@ -1133,22 +1280,73 @@
             audioContext.resume();
         }
 
+        function createInstrumentSound(freq, instrument, gainNode, duration) {
+            const inst = INSTRUMENTS[instrument] || INSTRUMENTS.piano;
+            const oscillators = [];
+            
+            inst.harmonics.forEach((harmGain, index) => {
+                const osc = audioContext.createOscillator();
+                const oscGain = audioContext.createGain();
+                
+                osc.type = inst.type;
+                let finalFreq = freq * (index + 1);
+                if (inst.octaveShift) finalFreq *= Math.pow(2, inst.octaveShift);
+                osc.frequency.value = finalFreq;
+                
+                if (inst.detuneAmount && index > 0) {
+                    osc.detune.value = inst.detuneAmount * index;
+                }
+                
+                oscGain.gain.value = harmGain * 0.15;
+                osc.connect(oscGain);
+                oscGain.connect(gainNode);
+                oscillators.push(osc);
+            });
+            
+            return oscillators;
+        }
+
+        function applyEnvelope(gainNode, instrument, duration) {
+            const inst = INSTRUMENTS[instrument] || INSTRUMENTS.piano;
+            const now = audioContext.currentTime;
+            const totalDur = (60 / bpm) * duration;
+            
+            const attackEnd = now + inst.attack;
+            const decayEnd = attackEnd + inst.decay;
+            const sustainEnd = now + totalDur - inst.release;
+            const releaseEnd = now + totalDur;
+            
+            gainNode.gain.setValueAtTime(0, now);
+            gainNode.gain.linearRampToValueAtTime(1, attackEnd);
+            gainNode.gain.linearRampToValueAtTime(inst.sustain, decayEnd);
+            gainNode.gain.setValueAtTime(inst.sustain, Math.max(decayEnd, sustainEnd));
+            gainNode.gain.linearRampToValueAtTime(0.001, releaseEnd);
+            
+            return releaseEnd;
+        }
+
         function startSustainedNote(name) {
             initAudio();
             if (activeOscillators.has(name)) return;
-            const osc = audioContext.createOscillator();
-            const gain = audioContext.createGain();
-            osc.connect(gain); gain.connect(audioContext.destination);
-            osc.frequency.value = noteToFreq(name);
-            osc.type = 'triangle';
-            gain.gain.setValueAtTime(0.2, audioContext.currentTime);
-            osc.start();
-            activeOscillators.set(name, { osc, gain });
+            
+            const instrument = tracks[currentTrackIndex].instrument || 'piano';
+            const masterGain = audioContext.createGain();
+            masterGain.connect(audioContext.destination);
+            masterGain.gain.value = 0.3;
+            
+            const oscillators = createInstrumentSound(noteToFreq(name), instrument, masterGain, 1);
+            oscillators.forEach(osc => osc.start());
+            
+            activeOscillators.set(name, { oscillators, gain: masterGain });
         }
 
         function stopSustainedNote(name) {
             const a = activeOscillators.get(name);
-            if (a) { a.gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.1); a.osc.stop(audioContext.currentTime + 0.1); activeOscillators.delete(name); }
+            if (a) {
+                a.gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.1);
+                a.oscillators.forEach(osc => osc.stop(audioContext.currentTime + 0.1));
+                activeOscillators.delete(name);
+            }
         }
 
         function stopAllSustainedNotes() { activeOscillators.forEach((_, n) => stopSustainedNote(n)); }
@@ -1156,18 +1354,18 @@
         function playNotePreview(key) { key.classList.add('playing'); if (auditionEnabled) startSustainedNote(key.dataset.note); }
         function stopNotePreview(key) { key.classList.remove('playing'); stopSustainedNote(key.dataset.note); }
 
-        function playNoteWithSustain(name, dur) {
+        function playNoteWithSustain(name, dur, instrument) {
             initAudio();
-            const osc = audioContext.createOscillator();
-            const gain = audioContext.createGain();
-            osc.connect(gain); gain.connect(audioContext.destination);
-            osc.frequency.value = noteToFreq(name);
-            osc.type = 'triangle';
-            const t = (60 / bpm) * dur;
-            gain.gain.setValueAtTime(0.12, audioContext.currentTime);
-            gain.gain.setValueAtTime(0.12, audioContext.currentTime + t * 0.8);
-            gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + t);
-            osc.start(); osc.stop(audioContext.currentTime + t);
+            const masterGain = audioContext.createGain();
+            masterGain.connect(audioContext.destination);
+            
+            const oscillators = createInstrumentSound(noteToFreq(name), instrument, masterGain, dur);
+            const endTime = applyEnvelope(masterGain, instrument, dur);
+            
+            oscillators.forEach(osc => {
+                osc.start();
+                osc.stop(endTime);
+            });
         }
 
         function noteToFreq(name) {
@@ -1228,7 +1426,10 @@
                     if (track.muted || (hasSolo && !track.solo)) return;
                     track.notes.forEach((n, ni) => {
                         const key = `${ti}-${ni}-${n.beat}`;
-                        if (beat === n.beat && !playedNotes.has(key)) { playNoteWithSustain(n.note, n.length); playedNotes.add(key); }
+                        if (beat === n.beat && !playedNotes.has(key)) {
+                            playNoteWithSustain(n.note, n.length, track.instrument || 'piano');
+                            playedNotes.add(key);
+                        }
                     });
                 });
                 lastPlayedBeat = beat;
@@ -1257,7 +1458,7 @@
         // Track management
         function addNewTrack() {
             const i = tracks.length;
-            tracks.push({ name: 'Track ' + (i + 1), notes: [], color: TRACK_COLORS[i % TRACK_COLORS.length], muted: false, solo: false });
+            tracks.push({ name: 'Track ' + (i + 1), notes: [], color: TRACK_COLORS[i % TRACK_COLORS.length], muted: false, solo: false, instrument: 'piano' });
             const sel = document.getElementById('trackSelect');
             const opt = document.createElement('option');
             opt.value = i; opt.textContent = 'Track ' + (i + 1);
@@ -1296,10 +1497,17 @@
 
         function addAudioTrackUI(id) {
             const t = tracks[id];
+            const instrumentOptions = Object.keys(INSTRUMENTS).map(key => 
+                `<option value="${key}" ${t.instrument === key ? 'selected' : ''}>${INSTRUMENTS[key].name}</option>`
+            ).join('');
+            
             document.getElementById('tracksContainer').insertAdjacentHTML('beforeend', `
                 <div class="audio-track" data-track-id="${id}">
                     <div class="track-info">
                         <input type="text" class="track-name-input" value="Track ${id + 1}" maxlength="12" style="color:${t.color};">
+                        <select class="track-instrument-select" onchange="changeTrackInstrument(${id}, this.value)">
+                            ${instrumentOptions}
+                        </select>
                         <div class="track-controls">
                             <button class="track-btn solo" onclick="toggleSolo(this,${id})">S</button>
                             <button class="track-btn mute" onclick="toggleMute(this,${id})">M</button>
@@ -1333,7 +1541,7 @@
         document.getElementById('modalOverlay').addEventListener('click', e => { if (e.target === document.getElementById('modalOverlay')) closeModal(); });
         window.addEventListener('resize', updateTrackPreviews);
 
-        // Wake lock to prevent screen sleep
+        // Wake lock
         if ('wakeLock' in navigator) {
             let wakeLock = null;
             const requestWakeLock = async () => {
