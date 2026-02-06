@@ -4655,10 +4655,7 @@
             initDatabase().catch(e => console.log('DB init error:', e));
             
             // 샘플러 로드 (백그라운드)
-            initSamplers().then(() => {
-                console.log('Samplers ready');
-                showToast('피아노 샘플 로드 완료');
-            }).catch(e => console.log('Sampler init error:', e));
+            initSamplers().catch(e => console.log('Sampler init error:', e));
         }
 
         function resetProject() {
@@ -5620,10 +5617,10 @@
 
         // 샘플 기반 악기 (Tone.js Sampler)
         const samplers = {};
-        let samplersLoaded = false;
-        let samplerLoadingPromise = null;
+        const loadedInstruments = new Set();
+        let pianoLoaded = false;
 
-        // Salamander Grand Piano 샘플 URL (Tone.js 호스팅)
+        // Salamander Grand Piano 샘플 URL
         const PIANO_SAMPLES = {
             'A0': 'A0.mp3', 'C1': 'C1.mp3', 'D#1': 'Ds1.mp3', 'F#1': 'Fs1.mp3',
             'A1': 'A1.mp3', 'C2': 'C2.mp3', 'D#2': 'Ds2.mp3', 'F#2': 'Fs2.mp3',
@@ -5635,68 +5632,124 @@
             'A7': 'A7.mp3', 'C8': 'C8.mp3'
         };
 
-        // MIDI.js Soundfont 기반 악기 샘플 URL
-        const SOUNDFONT_BASE = 'https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/';
-        const SOUNDFONT_INSTRUMENTS = {
+        // 기본 샘플 노트들 (모든 악기용)
+        const SAMPLE_NOTES = ['C2', 'C3', 'C4', 'C5', 'C6'];
+
+        // MIDI.js Soundfont 악기 매핑
+        const SOUNDFONT_MAP = {
             'piano': 'acoustic_grand_piano',
             'electric-piano': 'electric_piano_1',
             'organ': 'church_organ',
             'guitar': 'acoustic_guitar_nylon',
+            'acoustic-guitar': 'acoustic_guitar_nylon',
             'electric-guitar': 'electric_guitar_clean',
+            'clean-guitar': 'electric_guitar_clean',
+            'distortion-guitar': 'distortion_guitar',
             'bass': 'acoustic_bass',
             'electric-bass': 'electric_bass_finger',
+            'slap-bass': 'slap_bass_1',
+            'synth-bass': 'synth_bass_1',
             'strings': 'string_ensemble_1',
+            'violin': 'violin',
+            'cello': 'cello',
             'synth': 'synth_brass_1',
+            'synth-lead': 'lead_1_square',
+            'synth-pad': 'pad_2_warm',
             'pad': 'pad_2_warm',
             'brass': 'brass_section',
+            'trumpet': 'trumpet',
+            'trombone': 'trombone',
             'flute': 'flute',
-            'saxophone': 'alto_sax'
+            'clarinet': 'clarinet',
+            'saxophone': 'alto_sax',
+            'oboe': 'oboe',
+            'harmonica': 'harmonica',
+            'accordion': 'accordion',
+            'harp': 'orchestral_harp',
+            'marimba': 'marimba',
+            'vibraphone': 'vibraphone',
+            'xylophone': 'xylophone',
+            'music-box': 'music_box',
+            'bell': 'tubular_bells',
+            'pluck': 'pizzicato_strings',
+            'square': 'lead_1_square'
         };
 
-        async function initSamplers() {
-            if (samplersLoaded) return;
-            if (samplerLoadingPromise) return samplerLoadingPromise;
+        // 악기 샘플 로드
+        async function loadInstrumentSampler(instrument) {
+            if (loadedInstruments.has(instrument)) return samplers[instrument];
+            if (samplers[instrument]) return samplers[instrument];
 
-            samplerLoadingPromise = new Promise(async (resolve) => {
-                try {
-                    await Tone.start();
-                    
-                    // 피아노 샘플러 로드 (Salamander)
+            const soundfontName = SOUNDFONT_MAP[instrument];
+            if (!soundfontName) return null;
+
+            try {
+                await Tone.start();
+                
+                // 피아노는 Salamander 샘플 사용
+                if (instrument === 'piano') {
                     samplers['piano'] = new Tone.Sampler({
                         urls: PIANO_SAMPLES,
                         baseUrl: 'https://tonejs.github.io/audio/salamander/',
-                        onload: () => console.log('Piano samples loaded')
+                        onload: () => {
+                            loadedInstruments.add('piano');
+                            pianoLoaded = true;
+                        }
                     }).toDestination();
-
-                    // 로딩 대기
                     await Tone.loaded();
-                    samplersLoaded = true;
-                    console.log('All samplers loaded');
-                    resolve();
-                } catch (e) {
-                    console.warn('Failed to load samplers, using synth fallback:', e);
-                    samplersLoaded = false;
-                    resolve();
+                    return samplers['piano'];
                 }
-            });
 
-            return samplerLoadingPromise;
+                // 다른 악기는 MIDI.js Soundfont 사용
+                const baseUrl = `https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/${soundfontName}-mp3/`;
+                const urls = {};
+                
+                // 주요 노트들만 로드 (용량 절약)
+                ['C2', 'D#2', 'F#2', 'A2', 
+                 'C3', 'D#3', 'F#3', 'A3',
+                 'C4', 'D#4', 'F#4', 'A4',
+                 'C5', 'D#5', 'F#5', 'A5',
+                 'C6', 'D#6', 'F#6', 'A6'].forEach(note => {
+                    const fileName = note.replace('#', 's');
+                    urls[note] = `${fileName}.mp3`;
+                });
+
+                samplers[instrument] = new Tone.Sampler({
+                    urls: urls,
+                    baseUrl: baseUrl,
+                    onload: () => {
+                        loadedInstruments.add(instrument);
+                        console.log(`${instrument} samples loaded`);
+                    }
+                }).toDestination();
+
+                await Tone.loaded();
+                return samplers[instrument];
+            } catch (e) {
+                console.warn(`Failed to load ${instrument} samples:`, e);
+                return null;
+            }
         }
 
-        // 샘플 또는 합성음으로 노트 재생
-        async function playSampledNote(name, duration, instrument) {
-            // 피아노만 샘플 사용, 나머지는 합성음
-            if (instrument === 'piano' && samplers['piano'] && samplersLoaded) {
-                try {
-                    await Tone.start();
-                    const now = Tone.now();
-                    samplers['piano'].triggerAttackRelease(name, duration, now);
-                    return true;
-                } catch (e) {
-                    console.warn('Sample play failed:', e);
+        // 초기 로드 (피아노 + 자주 쓰는 악기)
+        async function initSamplers() {
+            try {
+                await Tone.start();
+                
+                // 피아노 먼저 로드
+                await loadInstrumentSampler('piano');
+                showToast('🎹 피아노 샘플 로드 완료');
+                
+                // 백그라운드에서 다른 악기들 로드
+                const commonInstruments = ['guitar', 'bass', 'strings', 'synth'];
+                for (const inst of commonInstruments) {
+                    loadInstrumentSampler(inst).then(() => {
+                        console.log(`${inst} ready`);
+                    });
                 }
+            } catch (e) {
+                console.warn('Sampler init error:', e);
             }
-            return false; // 합성음 폴백 필요
         }
 
         function createInstrumentSound(freq, instrument, gainNode, duration) {
@@ -5829,15 +5882,19 @@
         async function playNoteWithSustain(name, dur, instrument) {
             initAudio();
             
-            // 샘플러가 로드되어 있으면 샘플 사용 (피아노)
-            if (instrument === 'piano' && samplersLoaded && samplers['piano']) {
+            // 샘플러 사용 시도
+            const sampler = samplers[instrument];
+            if (sampler && loadedInstruments.has(instrument)) {
                 try {
                     await Tone.start();
-                    samplers['piano'].triggerAttackRelease(name, dur);
+                    sampler.triggerAttackRelease(name, dur);
                     return;
                 } catch (e) {
-                    // 샘플 재생 실패시 합성음으로 폴백
+                    console.warn('Sample play failed, using synth:', e);
                 }
+            } else {
+                // 샘플이 아직 안 로드되었으면 백그라운드로 로드 시작
+                loadInstrumentSampler(instrument);
             }
             
             // 합성음 폴백
