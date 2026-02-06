@@ -21,6 +21,7 @@
     
     <title>TabletDAW - Mobile Music Studio</title>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
     <style>
         * {
             margin: 0;
@@ -4652,6 +4653,12 @@
             initInstrumentDropdown();
             initProject();
             initDatabase().catch(e => console.log('DB init error:', e));
+            
+            // 샘플러 로드 (백그라운드)
+            initSamplers().then(() => {
+                console.log('Samplers ready');
+                showToast('피아노 샘플 로드 완료');
+            }).catch(e => console.log('Sampler init error:', e));
         }
 
         function resetProject() {
@@ -5611,6 +5618,87 @@
             audioContext.resume();
         }
 
+        // 샘플 기반 악기 (Tone.js Sampler)
+        const samplers = {};
+        let samplersLoaded = false;
+        let samplerLoadingPromise = null;
+
+        // Salamander Grand Piano 샘플 URL (Tone.js 호스팅)
+        const PIANO_SAMPLES = {
+            'A0': 'A0.mp3', 'C1': 'C1.mp3', 'D#1': 'Ds1.mp3', 'F#1': 'Fs1.mp3',
+            'A1': 'A1.mp3', 'C2': 'C2.mp3', 'D#2': 'Ds2.mp3', 'F#2': 'Fs2.mp3',
+            'A2': 'A2.mp3', 'C3': 'C3.mp3', 'D#3': 'Ds3.mp3', 'F#3': 'Fs3.mp3',
+            'A3': 'A3.mp3', 'C4': 'C4.mp3', 'D#4': 'Ds4.mp3', 'F#4': 'Fs4.mp3',
+            'A4': 'A4.mp3', 'C5': 'C5.mp3', 'D#5': 'Ds5.mp3', 'F#5': 'Fs5.mp3',
+            'A5': 'A5.mp3', 'C6': 'C6.mp3', 'D#6': 'Ds6.mp3', 'F#6': 'Fs6.mp3',
+            'A6': 'A6.mp3', 'C7': 'C7.mp3', 'D#7': 'Ds7.mp3', 'F#7': 'Fs7.mp3',
+            'A7': 'A7.mp3', 'C8': 'C8.mp3'
+        };
+
+        // MIDI.js Soundfont 기반 악기 샘플 URL
+        const SOUNDFONT_BASE = 'https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/';
+        const SOUNDFONT_INSTRUMENTS = {
+            'piano': 'acoustic_grand_piano',
+            'electric-piano': 'electric_piano_1',
+            'organ': 'church_organ',
+            'guitar': 'acoustic_guitar_nylon',
+            'electric-guitar': 'electric_guitar_clean',
+            'bass': 'acoustic_bass',
+            'electric-bass': 'electric_bass_finger',
+            'strings': 'string_ensemble_1',
+            'synth': 'synth_brass_1',
+            'pad': 'pad_2_warm',
+            'brass': 'brass_section',
+            'flute': 'flute',
+            'saxophone': 'alto_sax'
+        };
+
+        async function initSamplers() {
+            if (samplersLoaded) return;
+            if (samplerLoadingPromise) return samplerLoadingPromise;
+
+            samplerLoadingPromise = new Promise(async (resolve) => {
+                try {
+                    await Tone.start();
+                    
+                    // 피아노 샘플러 로드 (Salamander)
+                    samplers['piano'] = new Tone.Sampler({
+                        urls: PIANO_SAMPLES,
+                        baseUrl: 'https://tonejs.github.io/audio/salamander/',
+                        onload: () => console.log('Piano samples loaded')
+                    }).toDestination();
+
+                    // 로딩 대기
+                    await Tone.loaded();
+                    samplersLoaded = true;
+                    console.log('All samplers loaded');
+                    resolve();
+                } catch (e) {
+                    console.warn('Failed to load samplers, using synth fallback:', e);
+                    samplersLoaded = false;
+                    resolve();
+                }
+            });
+
+            return samplerLoadingPromise;
+        }
+
+        // 샘플 또는 합성음으로 노트 재생
+        async function playSampledNote(name, duration, instrument) {
+            // 피아노만 샘플 사용, 나머지는 합성음
+            if (instrument === 'piano' && samplers['piano'] && samplersLoaded) {
+                try {
+                    await Tone.start();
+                    const now = Tone.now();
+                    samplers['piano'].triggerAttackRelease(name, duration, now);
+                    return true;
+                } catch (e) {
+                    console.warn('Sample play failed:', e);
+                }
+            }
+            return false; // 합성음 폴백 필요
+        }
+
         function createInstrumentSound(freq, instrument, gainNode, duration) {
             const inst = INSTRUMENTS[instrument] || INSTRUMENTS.piano;
             const oscillators = [];
@@ -5738,8 +5826,21 @@
         function playNotePreview(key) { key.classList.add('playing'); if (auditionEnabled) startSustainedNote(key.dataset.note); }
         function stopNotePreview(key) { key.classList.remove('playing'); stopSustainedNote(key.dataset.note); }
 
-        function playNoteWithSustain(name, dur, instrument) {
+        async function playNoteWithSustain(name, dur, instrument) {
             initAudio();
+            
+            // 샘플러가 로드되어 있으면 샘플 사용 (피아노)
+            if (instrument === 'piano' && samplersLoaded && samplers['piano']) {
+                try {
+                    await Tone.start();
+                    samplers['piano'].triggerAttackRelease(name, dur);
+                    return;
+                } catch (e) {
+                    // 샘플 재생 실패시 합성음으로 폴백
+                }
+            }
+            
+            // 합성음 폴백
             const masterGain = audioContext.createGain();
             masterGain.connect(audioContext.destination);
             
